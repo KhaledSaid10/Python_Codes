@@ -1,32 +1,51 @@
 import socket
 import threading
 
-# Function to handle each client connection
-def handle_client(client_socket):
+HOST = '127.0.0.1'  # Standard loopback interface address (localhost)
+PORT = 65432        # Port to listen on (non-privileged ports are > 1023)
+
+clients = []
+
+def handle_client(client_socket, address):
+    """Handles communication with a single client."""
     while True:
         try:
-            message = client_socket.recv(1024)
-            if message:
-                print(f"Received message: {message.decode('utf-8')}")
-                client_socket.send("ACK!".encode('utf-8'))
+            data = client_socket.recv(1024).decode('utf-8')
+            if data:
+                broadcast(data, client_socket)
             else:
+                remove_client(client_socket)
                 break
         except:
+            remove_client(client_socket)
             break
+
+def broadcast(message, client_socket):
+    """Sends a message to all connected clients."""
+    for client in clients:
+        if client != client_socket:
+            try:
+                client.send(message.encode('utf-8'))
+            except:
+                remove_client(client)
+
+def remove_client(client_socket):
+    """Removes a client from the list and closes their socket."""
+    clients.remove(client_socket)
     client_socket.close()
 
-# Main server function to listen for and accept new client connections
-def server_function():
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind(('0.0.0.0', 9999))
-    server.listen(5)
-    print("Server listening on port 9999...")
-    
-    while True:
-        client, addr = server.accept()
-        print(f"Accepted connection from: {addr[0]}:{addr[1]}")
-        client_handler = threading.Thread(target=handle_client, args=(client,))
-        client_handler.start()
+def start_server():
+    """Starts the server and listens for connections."""
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind((HOST, PORT))
+    server_socket.listen()
+    print(f'Server started on {HOST}:{PORT}')
 
-if __name__ == "__main__":
-    server_function()
+    while True:
+        client_socket, address = server_socket.accept()
+        clients.append(client_socket)
+        print(f'Client connected from {address}')
+        threading.Thread(target=handle_client, args=(client_socket, address)).start()
+
+if __name__ == '__main__':
+    start_server()
